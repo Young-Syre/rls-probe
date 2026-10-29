@@ -609,19 +609,33 @@ def collect(
 # Connection
 # ---------------------------------------------------------------------------
 
-_DSN_PASSWORD = re.compile(r"(?i)(password=)[^\s]*")
+_DSN_PASSWORD = re.compile(r"(?i)(password=)[^\s&]*")
 
 
 def redact_dsn(dsn: str) -> str:
-    """Keep a DSN printable."""
+    """Keep a DSN printable.
+
+    This value goes in the report header, which is the part people paste into
+    tickets, so every place libpq accepts a password has to be covered -- not
+    only the userinfo field.  ``password=`` in a URI query string is a legal
+    libpq form, and it used to survive both branches: a URL with no ``@`` was
+    returned untouched, and a URL with one had only its userinfo redacted while
+    ``?password=`` went out verbatim.
+
+    Other query parameters are kept, because ``sslmode`` and friends are worth
+    seeing in a report header and carry nothing secret.
+    """
     if "://" in dsn:
         scheme, _, rest = dsn.partition("://")
-        if "@" in rest:
-            credentials, _, host = rest.partition("@")
+        authority, question, query = rest.partition("?")
+        if "@" in authority:
+            credentials, _, host = authority.partition("@")
             user, sep, _ = credentials.partition(":")
             if sep:
-                return f"{scheme}://{user}:***@{host}"
-        return dsn
+                authority = f"{user}:***@{host}"
+        if question:
+            query = _DSN_PASSWORD.sub(r"\1***", query)
+        return f"{scheme}://{authority}{question}{query}"
     return _DSN_PASSWORD.sub(r"\1***", dsn)
 
 
@@ -645,6 +659,13 @@ def connect(dsn: str | None, *, statement_timeout_ms: int = 30_000) -> Any:
     connection.autocommit = False
     with connection.cursor() as cursor:
         # SET does not take parameters, so go through set_config, which does.
+        #
+        # is_local is false deliberately, which makes the setting session-wide
+        # rather than transaction-local.  autocommit is off, so a local setting
+        # would be reverted at the first commit and every later transaction
+        # would run with the server's default timeout -- which is the opposite
+        # of the intent.  The connection is opened and owned here and is
+        # read-only, so a session-wide setting affects nothing else.
         cursor.execute(
             "SELECT pg_catalog.set_config('statement_timeout', %s, false)",
             (str(int(statement_timeout_ms)),),

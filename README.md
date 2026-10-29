@@ -489,7 +489,7 @@ git clone https://github.com/Young-Syre/rls-probe
 cd rls-probe
 pip install -e '.[dev]'
 
-pytest          # 206 tests, 245 assertions, all offline
+pytest          # 211 tests, 247 assertions, all offline
 ruff check .
 ruff format --check .
 ```

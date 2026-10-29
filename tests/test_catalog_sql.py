@@ -88,6 +88,31 @@ def test_redact_dsn_leaves_a_passwordless_dsn_alone():
     assert catalog.redact_dsn("postgresql:///app") == "postgresql:///app"
 
 
+# `password=` in a URI query string is a legal libpq form, and it used to
+# survive both branches: a URL with no `@` was returned untouched, and a URL
+# with one had only its userinfo redacted. This value goes in the report
+# header, which is the part people paste into tickets.
+@pytest.mark.parametrize(
+    "dsn",
+    [
+        "postgresql://db.example.com/app?password=hunter2",
+        "postgresql://user@db.example.com/app?password=hunter2&sslmode=require",
+        "postgresql://user:hunter2@db.example.com/app?password=hunter2",
+        "postgresql://user:hunter2@db.example.com:5432/app?sslmode=require&PASSWORD=hunter2",
+    ],
+)
+def test_redact_dsn_hides_a_password_in_the_query_string(dsn: str) -> None:
+    assert "hunter2" not in catalog.redact_dsn(dsn)
+
+
+def test_redact_dsn_keeps_the_other_query_parameters():
+    # sslmode is worth seeing in a report header and carries nothing secret.
+    assert (
+        catalog.redact_dsn("postgresql://db.example.com/app?sslmode=require")
+        == "postgresql://db.example.com/app?sslmode=require"
+    )
+
+
 def test_managed_schemas_cover_the_supabase_set():
     for schema in ("auth", "storage", "realtime", "vault", "extensions"):
         assert schema in catalog.MANAGED_SCHEMAS
