@@ -1,0 +1,83 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rls-probe"
+version = "0.1.0"
+description = "Audit the row-level-security posture of a PostgreSQL database, including Supabase and PostgREST deployments."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "David Nichols" }]
+keywords = [
+    "postgresql",
+    "postgres",
+    "row-level-security",
+    "rls",
+    "supabase",
+    "postgrest",
+    "security",
+    "audit",
+    "multi-tenant",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
+
+# One runtime dependency, bounded to psycopg 3. Everything else is stdlib, so
+# the import surface of a tool you point at a production database stays small
+# and auditable.
+dependencies = ["psycopg[binary]>=3.2,<4"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.urls]
+Homepage = "https://github.com/Young-Syre/rls-probe"
+Source = "https://github.com/Young-Syre/rls-probe"
+Issues = "https://github.com/Young-Syre/rls-probe/issues"
+
+[project.scripts]
+rls-probe = "rls_probe.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rls_probe = ["py.typed"]
+
+[tool.pytest.ini_options]
+# The whole suite is offline: every check is a pure function over catalog rows,
+# so nothing here needs or opens a database connection.
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 96
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+    # The check functions are long on purpose: each finding's prose lives next
+    # to the condition that produces it, which is easier to review than prose
+    # held in a table somewhere else.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]
